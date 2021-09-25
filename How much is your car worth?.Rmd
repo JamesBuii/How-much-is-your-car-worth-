@@ -1,0 +1,666 @@
+---
+title: "How much is your car worth? "
+author: "James Bui & Malcolm Beard"
+date: "07/07/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Import Packages 
+#install.packages("Rmisc")
+#install.packages("plyr")
+library(tidyverse) #for data manipulation
+library(modelr)
+library("Rmisc")
+library("plyr")
+library(knitr)
+library(readr) # for reading files
+library(MASS) # for Stepwise Regression
+library(car)
+library(lmtest)  # for Breusch-Pagan test for Heteroskedasticity
+library(randomizeBE)  # for runs.pvalue(resid_studentized) test for autocorrelation 
+```
+
+
+```{r}
+#Loading Data - Set up the workspace w Project File
+setwd("~/Desktop/ST362 Project File") # <--- change this line to whatever your workspace is with the Cars csv file is 
+CARS <- read_csv("Project_data_Cars.csv" )
+CARS 
+```
+
+```{r}
+#Activity 1.1: A Simple Linear Regression
+sample_model <- lm(CARS$Price ~ CARS$Mileage)
+sample_model
+
+Mil_vs_Price <- ggplot(data=CARS, mapping = aes(x= Mileage,y = Price)) + geom_point(mapping=aes(x=Mileage,y=Price)) + geom_smooth(mapping=aes(x=Mileage,y=Price))
+Mil_vs_Price
+
+#1.2) Least Squares Regression Line
+#Least Square Method - Long Way
+XVar <- CARS$Mileage
+YVar <- CARS$Price
+
+#Calc X distance from mean and Y distance from mean
+x_distfrommean <- (XVar-mean(XVar))
+y_distfrommean <- (YVar-mean(YVar))
+
+# SXY (X Distance from mean * Y Distance from mean) and SXX (X Distance from mean)^2
+SXY <- sum(x_distfrommean * y_distfrommean)
+SXX <- sum((x_distfrommean)^2)
+
+#B1 & B0
+b1 <- SXY / SXX
+b0 <- mean(YVar) - b1*(mean(XVar))
+b1
+b0
+
+#Therefore the Simple Linear Regression Model Equation is:
+# y = b0 + b1x
+# y = 24764.56 + -0.1725205x
+
+#Least Square Method -Short Way 
+y = CARS$Price
+x1 = CARS$Mileage
+fit.regmod = lm(y~x1, data = CARS)
+fit.regmod
+
+#Uncomment for more information
+summary(fit.regmod) 
+#coefficients(fit.regmod)
+anova(fit.regmod)
+
+#R Value Calculation
+R <- sqrt(0.02046)
+#R <--- uncomment to reveal the R Statistic 
+
+#Answers to 1.2)
+#RegModel - y = 24764.56 + -0.1725205x
+#RSquared = 0.02046
+#R = 0.1430385
+#T-Statistics: (intercept) 27.383, (x1) = -4.093 - > search & compare w/ critical t-value 
+#P-Values = (intercept) 2e-16, (x1) 4.68e-05 
+
+#Assuming a standard confidence interval of 0.95, the Pvalues of both models are under 0.05 therefore we can reject the null hypothesis. Additionally looking at the T statistics, we can compare the absolute T-statistic to its critical T value. Therefore, mileage is not a good indicator of price 
+
+#1.3) Residual Value = Observed Retail Price - Expected Price from Model
+
+#Observed Value 
+first_mileage <- CARS$Mileage[1]
+observed_price <- CARS$Price[1]
+
+#Expected Value 
+expected_price <- b0 + b1*first_mileage
+
+#Residual Value 
+residual_value <- observed_price - expected_price
+residual_value
+
+#Residual Value: -6032.165 
+
+#1.4) Comment on the limitation of using a Simple Linear Regression 
+# The limitation of using a Simple Linear Regression is that it assumes there is linearity (a straight line) relationship between both the independent and dependent variable. Other Assumptions include Homoscedasticity: which is the assumption that the variance of residuals is the same for any value of X, Independence: observations are independent of eachother and Normality: for any fixed value of X, Y is normally distributed. If any of these assumptions are violated we cannot do a Simple Linear Regression. 
+
+#Another common limitation to Simple Linear Regressions are 'Underfitting" and 'Overfitting'.
+```
+
+```{r}
+#ACTIVITY 2: COMPARING VARIABLE SELECTION TECHNIQUES 
+
+#2.5a) Create 7 Regression Models with different variables
+
+#Initialize variables 
+YVAR <- CARS$Price
+xVar1 <- CARS$Cyl
+xVar2 <- CARS$Liter
+xVar3 <- CARS$Doors
+xVar4 <- CARS$Cruise
+xVar5 <- CARS$Sound
+xVar6 <- CARS$Leather
+xVar7 <- CARS$Mileage
+
+#Regression Model 1: Price ~ Cyl
+Regmod1 <- lm(YVAR ~ xVar1)
+#Regmod1
+#summary(Regmod1) <--- uncomment and delete this arrow for Rsquared Value
+#Int: -17.06, Cyl: 4054.20
+#Rsquared = 0.3239
+
+#Regression Model 2: Price ~ Liter
+Regmod2 <- lm(YVAR ~ xVar2)
+#Regmod2
+#summary(Regmod2) <--- uncomment and delete this arrow for Rsquared Value
+#Int: 6186, Liter: 4990
+#Rsquared = 0.3115
+
+#Regression Model 3: Price ~ Doors
+Regmod3 <- lm(YVAR ~ xVar3)
+#Regmod3
+#summary(Regmod3)
+#Int: 27034, Doors: -1613
+#Rsquared = 0.01925
+
+#Regression Model 4: Price ~ Cruise
+Regmod4 <- lm(YVAR ~ xVar4)
+#Regmod4
+#summary(Regmod4)
+#Int: 13922, Cruise: 9862
+#Rsquared = 0.1856,
+
+#Regression Model 5: Price ~ Sound
+Regmod5 <- lm(YVAR ~ xVar5)
+#Regmod5
+#summary(Regmod5)
+#Int: 23130 , Sound: -2631
+#Rsquared = 0.01546
+
+#Regression Model 6: Price ~ Leather
+Regmod6 <- lm(YVAR ~ xVar6)
+#Regmod6
+#summary(Regmod6)
+#Int: 18829, Leather: 3473
+#Rsquared = 0.02471
+
+#Regression Model 7: Price ~ Mileage
+Regmod7 <- lm(YVAR ~ xVar7)
+#Regmod7
+#summary(Regmod7)
+#Int:24764.5590 , Mileage = -0.1725 
+#Rsquared = 0.02046
+
+#Conclusion: Variable Cyl is the variable with the highest R Squared Value. Therefore, we will denote it X1
+X1 <- CARS$Cyl
+```
+
+```{r}
+#2.5b) 6 Regression Models with 2 Variables 
+RegMod1 <- lm(YVAR ~ X1 + xVar2)
+RegMod2 <- lm(YVAR ~ X1 + xVar3)
+RegMod3 <- lm(YVAR ~ X1 + xVar4)
+RegMod4 <- lm(YVAR ~ X1 + xVar5)
+RegMod5 <- lm(YVAR ~ X1 + xVar6)
+RegMod6 <- lm(YVAR ~ X1 + xVar7)
+
+#summary(RegMod1)
+#summary(RegMod2)
+#summary(RegMod3)
+#summary(RegMod4)
+#summary(RegMod5)
+#summary(RegMod6)
+
+#R Squared Values of 6 Regression Models 
+#Model1 > R Squared: 0.3259
+#Model2 > R Squared: 0.3435
+#Model3 > R Squared: 0.3839
+#Model4 > R Squared: 0.3293
+#Model5 > R Squared: 0.337
+#Model6 > R Squared: 0.3398
+
+#RSquared Difference caclulation
+RSquared_Diff <- 0.3839 - 0.3239
+RSquared_Diff
+
+#RegModel3: with explanatory variables Cyl and Cruuise have the highest R Squared Value. The difference between the R Square values is 0.06. The Regression Model improved by 0.06 when the variable was included 
+```
+
+```{r}
+#2.5c) Use the software to conduct a stepwise regression. List each of the explanatory variables in the model suggested by the stepwise regression procedure 
+#Method 1: step() function 
+#Create a linear model that fits all 7 given variables and linear model with intercept to begin 
+FitAll7 <- lm(Price ~ Cyl + Liter + Doors + Cruise + Sound + Leather + Mileage, data=CARS)
+FitStart <- lm(Price ~ 1, data = CARS)
+
+#Stepwise Regression: Forward Selecion Formula [#ofvariable, scope = formula(model_name)]
+#Use: stepAIC() choose lowest AIC
+step(FitStart, direction = "forward", scope=formula(FitAll7)) # <-- Scope = how far the reg will go will all
+
+#The Stepwise Regression recommends explanatory variables Cyl, Cruise, Leather, Mileage, Doors and Sound in this order. 
+# lm(formula = Price ~ Cyl + Cruise + Leather + Mileage + Doors + Sound, data = CARS)
+
+#Method 2: stepAIC() function [In-Class Method]
+FitAll7 <- lm(Price ~ Cyl + Liter + Doors + Cruise + Sound + Leather + Mileage, data=CARS)
+stepwise <- stepAIC(FitAll7,direction="both")
+stepwise$anova # display results 
+stepwise$coefficients #display coefficients 
+summary(stepwise)
+#Notes: AIC smaller the better
+#Suggested Model:  Price ~ Cyl + Doors + Cruise + Sound + Leather + Mileage
+#AIC Value: 14330.22 
+
+#The model with the lowest AIC value is the model that we should use according to this Stepwise Regression. This is because the (AIC) 'Akaike information criterion' is an estimator of out-of-sample prediction error which makes it a good measure to judge the relative quality of statistic models from a given dataset. lm model : Price ~ Cyl + Doors + Cruise + Sound + Leather + Mileage had the 14330.22 value, therefore we should use it.
+```
+
+```{r}
+#2.6) Use the software to develop a model using best subsets techniques for the whole data set. Notice that stepwise regression simply states which model to use, while best subsets provides much more information and requires the user to choose how many variables to include in the model. In general, statisticians select models that have a large R square, and a relatively small number of explanatory variables. Based on the output from best subsets which several explanatory variables should be included in a regression model
+```
+
+```{r}
+# To include Categorical Variables into a regression model we must first begin by creating dummy variables for each subcategory within the categorical variables: Model, Trim, Make, Type. These new dummy variables will be binary and either have values 0 -false ,1 - True and will then be fit into the model for best subsets regression.  
+
+#Model Variable 
+#32 Dummy Variables for Model Categorical Variables [0 - False ,1- True]
+CARS$Model_Century <- ifelse(CARS$Model == "Century",1,0)
+CARS$Model_Lacrosse <- ifelse(CARS$Model == "Lacrosse",1,0)
+CARS$Model_Lesabre <- ifelse(CARS$Model == "Lesabre",1,0)
+CARS$Model_ParkAvenue <- ifelse(CARS$Model == "Park Avenue",1,0)
+CARS$Model_CST_V <- ifelse(CARS$Model == "CST-V",1,0)
+
+CARS$Model_CTS <- ifelse(CARS$Model == "CTS",1,0)
+CARS$Model_Deville <- ifelse(CARS$Model == "Deville",1,0)
+CARS$Model_STS_V6 <- ifelse(CARS$Model == "STS-V6",1,0)
+CARS$Model_STS_V8 <- ifelse(CARS$Model == "STS-V8",1,0)
+CARS$Model_XLR_V8 <- ifelse(CARS$Model == "XLR-V8",1,0)
+
+CARS$Model_AVEO <- ifelse(CARS$Model == "AVEO",1,0)
+CARS$Model_Cavalier <- ifelse(CARS$Model == "Cavalier",1,0)
+CARS$Model_Classic <- ifelse(CARS$Model == "Classic",1,0)
+CARS$Model_Cobalt <- ifelse(CARS$Model == "Cobalt",1,0)
+CARS$Model_Corvette <- ifelse(CARS$Model == "Corvette",1,0)
+
+
+CARS$Model_Impala <- ifelse(CARS$Model == "Impala",1,0)
+CARS$Model_Malibu <- ifelse(CARS$Model == "Malibu",1,0)
+CARS$Model_MonteCarlo <- ifelse(CARS$Model == "Monte Carlo",1,0)
+CARS$Model_Bonneville <- ifelse(CARS$Model == "Bonneville",1,0)
+CARS$Model_G6 <- ifelse(CARS$Model == "G6",1,0)
+
+CARS$Model_GrandAm <- ifelse(CARS$Model == "Grand Am",1,0)
+CARS$Model_GrandPrix <- ifelse(CARS$Model == "Grand Prix",1,0)
+CARS$Model_GTO <- ifelse(CARS$Model == "GTO",1,0)
+CARS$Model_Sunfire <- ifelse(CARS$Model == "Sunfire",1,0)
+CARS$Model_Vibe <- ifelse(CARS$Model == "Vibe",1,0)
+
+CARS$Model_Nine_Three <- ifelse(CARS$Model == "9_3",1,0)
+CARS$Model_Nine_ThreeHO <- ifelse(CARS$Model == "9_3 HO",1,0)
+CARS$Model_Nine_Five <- ifelse(CARS$Model == "9_5",1,0)
+CARS$Model_Nine_FiveHO <- ifelse(CARS$Model == "9_5 HO",1,0)
+CARS$Model_Nine_TwoXAWD <- ifelse(CARS$Model == "9-2X AWD",1,0)
+
+CARS$Model_Ion <- ifelse(CARS$Model == "Ion",1,0)
+CARS$Model_LSeries <- ifelse(CARS$Model == "L Series",1,0)
+```
+```{r}
+#Trim Variable
+#47 Dummy Variables for Trim Categorical Variables [0 - False ,1- True]
+CARS$Trim_Sedan4D <- ifelse(CARS$Trim == "Sedan 4D",1,0)
+CARS$Trim_CXSedan4D <- ifelse(CARS$Trim == "CX Sedan 4D",1,0)
+CARS$Trim_CXLSedan4D <- ifelse(CARS$Trim == "CXL Sedan 4D",1,0)
+CARS$Trim_CXSSedan4D <- ifelse(CARS$Trim == "CXS Sedan 4D",1,0)
+CARS$Trim_CustomSedan4D <- ifelse(CARS$Trim == "Custom Sedan 4D",1,0)
+
+CARS$Trim_LimitedSedan4D <- ifelse(CARS$Trim == "Limited Sedan 4D",1,0)
+CARS$Trim_SpecialEdUltra4D <- ifelse(CARS$Trim == "Special Ed Ultra 4D",1,0)
+CARS$Trim_DHSSedan4D <- ifelse(CARS$Trim == "DHS Sedan 4D",1,0)
+CARS$Trim_DTSSedan4D <- ifelse(CARS$Trim == "DTS Sedan 4D",1,0)
+CARS$Trim_HardtopConv2D <- ifelse(CARS$Trim == "Hardtop Conv 2D",1,0)
+
+CARS$Trim_LSHatchback4D <- ifelse(CARS$Trim == "LS Hatchback 4D",1,0)
+CARS$Trim_LSSedan4D <- ifelse(CARS$Trim == "LS Sedan 4D",1,0)
+CARS$Trim_LTHatchback4D <- ifelse(CARS$Trim == "LT Hatchback 4D",1,0)
+CARS$Trim_LTSedan4D <- ifelse(CARS$Trim == "LT Sedan 4D",1,0)
+CARS$Trim_SVMHatchback4D <- ifelse(CARS$Trim == "SVM Hatchback 4D",1,0)
+
+CARS$Trim_SVMSedan4D <- ifelse(CARS$Trim == "SVM Sedan 4D",1,0)
+CARS$Trim_Coupe2D <- ifelse(CARS$Trim == "LS Coupe 2D",1,0)
+CARS$Trim_LSCoupe2D <- ifelse(CARS$Trim == "LS Coupe 2D",1,0)
+CARS$Trim_LSSportCoupe2D <- ifelse(CARS$Trim == "LS Sport Coupe 2D",1,0)
+CARS$Trim_LSSportSedan4D <- ifelse(CARS$Trim == "LS Sport Sedan 4D",1,0)
+
+CARS$Trim_Conv2D <- ifelse(CARS$Trim == "Conv 2D",1,0)
+CARS$Trim_SSSedan4D <- ifelse(CARS$Trim == "SS Sedan 4D",1,0)
+CARS$Trim_LSMAXXHback4D <- ifelse(CARS$Trim == "LS MAXX Hback 4D",1,0)
+CARS$Trim_LTMAXXHback4D <- ifelse(CARS$Trim == "LT MAXX Hback 4D",1,0)
+CARS$Trim_MAXXHback4D <- ifelse(CARS$Trim == "MAXX Hback 4D",1,0)
+
+CARS$Trim_LTCoupe2D <- ifelse(CARS$Trim == "LT Coupe 2D",1,0)
+CARS$Trim_SSCoupe2D <- ifelse(CARS$Trim == "SS Coupe 2D",1,0)
+CARS$Trim_GXPSedan4D <- ifelse(CARS$Trim == "GXP Sedan 4D",1,0)
+CARS$Trim_SESedan4D <- ifelse(CARS$Trim == "SE Sedan 4D",1,0)
+CARS$Trim_SLESedan4D <- ifelse(CARS$Trim == "SLE Sedan 4D",1,0)
+
+CARS$Trim_GTSedan4D <- ifelse(CARS$Trim == "GT Sedan 4D",1,0)
+CARS$Trim_GTCoupe2D <- ifelse(CARS$Trim == "GT Coupe 2D",1,0)
+CARS$Trim_GTPSedan4D <- ifelse(CARS$Trim == "GTP Sedan 4D",1,0)
+CARS$Trim_AWDSportwagon4D <- ifelse(CARS$Trim == "AWD Sportwagon 4D",1,0)
+CARS$Trim_GTSportwagon <- ifelse(CARS$Trim == "GT Sportwagon",1,0)
+
+CARS$Trim_Sportwagon4D <- ifelse(CARS$Trim == "Sportwagon 4D",1,0)
+CARS$Trim_LinearConv2D <- ifelse(CARS$Trim == "Linear Conv 2D",1,0)
+CARS$Trim_LinearSedan4D <- ifelse(CARS$Trim == "Linear Sedan 4D",1,0)
+CARS$Trim_AeroConv2D <- ifelse(CARS$Trim == "Aero Conv 2D",1,0)
+CARS$Trim_AeroSedan4D <- ifelse(CARS$Trim == "Aero Sedan 4D",1,0)
+
+CARS$Trim_ArcConv2D <- ifelse(CARS$Trim == "Arc Conv 2D",1,0)
+CARS$Trim_ArcSedan4D <- ifelse(CARS$Trim == "Arc Sedan 4D",1,0)
+CARS$Trim_ArcWagon4D<- ifelse(CARS$Trim == "Arc Wagon 4D",1,0)
+CARS$Trim_LinearWagon4D <- ifelse(CARS$Trim == "Linear Wagon 4D",1,0)
+CARS$Trim_AeroWagon4D <- ifelse(CARS$Trim == "Aero Wagon 4D",1,0)
+      
+CARS$Trim_QuadCoupe2D <- ifelse(CARS$Trim == "Quad Coupe 2D",1,0)
+CARS$Trim_L300Sedan4D <- ifelse(CARS$Trim == "L300 Sedan 4D",1,0)
+```
+```{r}
+#Make Variable
+#6 Dummy Variables Make Category Varaibles [0 - False ,1- True]
+CARS$Make_Buick <- ifelse(CARS$Make == "Buick",1,0)
+CARS$Make_Cadillac <- ifelse(CARS$Make == "Cadillac",1,0)
+CARS$Make_Chevrolet <- ifelse(CARS$Make == "Chevrolet",1,0)
+CARS$Make_Pontiac <- ifelse(CARS$Make == "Pontiac",1,0)
+CARS$Make_SAAB <- ifelse(CARS$Make == "SAAB",1,0)
+CARS$Make_Saturn <- ifelse(CARS$Make == "Saturn",1,0)
+```
+```{r}
+
+#Type Variable 
+#5 Dummy Variables Type Category Varaibles [0 - False ,1- True]
+CARS$Type_Sedan <- ifelse(CARS$Type == "Sedan",1,0)
+CARS$Type_Convertible <- ifelse(CARS$Type == "Convertible",1,0)
+CARS$Type_Hatchback <- ifelse(CARS$Type == "Hatchback",1,0)
+CARS$Type_Coupe <- ifelse(CARS$Type == "Coupe",1,0)
+CARS$Type_Wagon <- ifelse(CARS$Type == "Wagon",1,0)
+
+```
+
+
+```{r}
+#Perform the best subsets regression with 1 best model for each number of predictors 
+#In-Depth Version using Factor Variables for Trim, Model, Type and Make 
+library(leaps)
+regsubsets.2.6 <- 
+  regsubsets(Price ~ .,
+               data = CARS,
+               nbest = 1,       # 1 best model for each number of predictors
+               nvmax = 12,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL,
+               method = "forward",
+               really.big = TRUE
+               )
+regsubsets.2.6
+
+#Show the best model at each variable number 
+summary.2.6 <- summary(regsubsets.2.6)
+as.data.frame(summary.2.6$outmat)
+
+## Adjusted R2
+plot(regsubsets.2.6, scale = "adjr2", main = "Adjusted R^2")
+plot(regsubsets.2.6, scale = "Cp", main = " Mallow Cp")
+
+#Interpretation:
+#Notes for reading the plots: The plot shows that the top is best #dark and blank and that variable should be excluded, underneath should be excluded
+```
+```{r}
+#Choosing the model with the highest adjr2 value // Additionally Looking at the CP and bic values may help us 
+which.max(summary.2.6$adjr2)
+which.min(summary.2.6$cp)
+which.min(summary.2.6$bic)
+```
+```{r}
+#Activity 2.6 [Simplified Version]
+
+#Model Variable 
+mapping <- c("Century" = 0, "Lacrosse" = 1, "Lesabre" = 2, "Park Avenue" = 3, 'CST-V' = 4,"CTS" = 5, "Deville" = 6, "STS-V6" = 7, "STS-V8" = 8, 'XLR-V8' = 9,"AVEO" = 10, "Cavalier" = 11, "Classic" = 12, "Cobalt" = 13, 'Corvette' = 14,"Impala" = 15, "Malibu" = 16, "Monte Carlo" = 17, "Bonneville" = 18, 'G6' = 19,"Grand Am" = 20, "Grand Prix" = 21, "GTO" = 22, "Sunfire" = 23, 'Vibe' = 24,"9_3" = 25, "9_3 HO" = 26, "9_5" = 27, "9_5 HO" = 28, '9-2X AWD' = 29,"Ion" = 30, "L Series" = 31)
+
+#Levels for Categorical Variable
+CARS$Model.r <- mapping[CARS$Model]
+
+#Model.cat if you want a variable with LEVELS, otherwise Model.r
+#Model.cat <- factor(CARS$Model.r) #Convert to factor variable
+#CARS$Model.cat <- factor(CARS$Model.r)
+
+#Trim Variable
+mapping <- c("Sedan 4D" = 0, "CX Sedan 4D" = 1, "CXL Sedan 4D" = 2, "CXS Sedan 4D" = 3, 'Custom Sedan 4D' = 4,"Limited Sedan 4D" = 5, "Special Ed Ultra 4D" = 6, "DHS Sedan 4D" = 7, "DTS Sedan 4D" = 8, 'Hardtop Conv 2D' = 9,"LS Hatchback 4D" = 10, "LS Sedan 4D" = 11, "LT Hatchback 4D" = 12, "LT Sedan 4D" = 13, 'SVM Hatchback 4D' = 14,"SVM Sedan 4D" = 15, "Coupe 2D" = 16, "LS Coupe 2D" = 17, "LS Sport Coupe 2D" = 18, 'LS Sport Sedan 4D' = 19,"Conv 2D" = 20, "SS Sedan 4D" = 21, "LS MAXX Hback 4D" = 22, "LT MAXX Hback 4D" = 23, 'MAXX Hback 4D' = 24,"LT Coupe 2D" = 25, "SS Coupe 2D" = 26, "GXP Sedan 4D" = 27, "SE Sedan 4D" = 28, 'SLE Sedan 4D' = 29,"GT Sedan 4D" = 30, "GT Coupe 2D" = 31, "GTP Sedan 4D" = 32, "AWD Sportwagon 4D" = 33, "GT Sportwagon" = 34, 'Sportwagon 4D' = 35,"Linear Conv 2D" = 36, "Linear Sedan 4D" = 37, "Aero Conv 2D" = 38, "Aero Sedan 4D" = 39, 'Arc Conv 2D' = 40,"Arc Sedan 4D" = 41, "rc Wagon 4D" = 42, "Linear Wagon 4D" = 43, 'Aero Wagon 4D' = 44,"Quad Coupe 2D" = 45, "L300 Sedan 4D" = 46)
+
+CARS$Trim.r <- mapping[CARS$Trim]
+
+#Type Variable 
+#Display Categories and Number of Categories Under Type Variable
+categories <- unique(CARS$Type)
+numberOfCategories <- length(categories)
+#categories           <---- Uncomment for names of unique categories
+#numberOfCategories   <---- Uncomment for number of unique categories
+
+mapping <- c("Sedan" = 0, "Convertible" = 1, "Hatchback" = 2, "Coupe" = 3, 'Wagon' = 4)
+CARS$Type.r <- mapping[CARS$Type]
+
+#Make Variable
+#Display number of Categories and Number of Categories Under Make Variable 
+categories <- unique(CARS$Make) 
+numberOfCategories <- length(categories)
+
+mapping <- c("Buick" = 0, "Cadillac" = 1, "Chevrolet" = 2, "Pontiac" = 3, 'SAAB' = 4, "Saturn" = 5)
+CARS$Make.r <- mapping[CARS$Make]
+#CARS$Make.r
+
+#USE Make.cat if you want a variable with LEVELS 
+Make.cat <- factor(CARS$Make.r) #Convert to factor variable
+#CARS$Make.cat <- factor(CARS$Make.r)
+
+regsubsets.2.6.simplified <- 
+  regsubsets(Price ~ Cyl + Liter + Doors + Cruise + Sound + Leather + Mileage + Trim.r + Model.r + Type.r+Make.r,
+               data = CARS,
+               nbest = 1,       # 1 best model for each number of predictors
+               nvmax = NULL,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL,
+               method = "exhaustive",
+               really.big = TRUE
+               )
+regsubsets.2.6.simplified
+
+#Show the best model at each variable number 
+summary.2.6.simplified <- summary(regsubsets.2.6.simplified)
+as.data.frame(summary.2.6.simplified$outmat)
+
+## Adjusted R2
+plot(regsubsets.2.6.simplified, scale = "adjr2", main = "Adjusted R^2")
+plot(regsubsets.2.6.simplified, scale = "Cp", main = " Mallow Cp")
+```
+```{r}
+#Choosing the model with the highest adjr2 value // Additionally Looking at the CP and bic values may help us 
+which.max(summary.2.6.simplified$adjr2)
+which.min(summary.2.6.simplified$cp)
+which.min(summary.2.6.simplified$bic)
+```
+
+
+
+
+
+
+Activity 3:
+Question 3.8 
+```{r}
+#create plots of the residuals versus each explanatory variable in the model. Also create a plot of the residuals versus the predicted retail price (often called a residual versus fit plot)
+YVAR <- CARS$Price
+xVar1 <- CARS$Cyl
+xVar2 <- CARS$Liter
+xVar3 <- CARS$Doors
+xVar4 <- CARS$Cruise
+xVar5 <- CARS$Sound
+xVar6 <- CARS$Leather
+xVar7 <- CARS$Mileage
+
+Regmod1.3 <- lm(YVAR ~ xVar1)
+Regmod2.3 <- lm(YVAR ~ xVar2)
+Regmod3.3 <- lm(YVAR ~ xVar3)
+Regmod4.3 <- lm(YVAR ~ xVar4)
+Regmod5.3 <- lm(YVAR ~ xVar5)
+Regmod6.3 <- lm(YVAR ~ xVar6)
+Regmod7.3 <- lm(YVAR ~ xVar7)
+
+#plot(Regmod1.3,1)
+#plot(Regmod2.3,1)
+#plot(Regmod3.3,1)
+#plot(Regmod4.3,1)
+#plot(Regmod5.3,1)
+#plot(Regmod6.3,1)
+#plot(Regmod7.3,1)
+#plot(stepwise,1)
+
+
+#3.8 Plots 
+plot(CARS$Cyl,stepwise$residuals)
+plot(CARS$Doors,stepwise$residuals)
+plot(CARS$Cruise,stepwise$residuals)
+plot(CARS$Sound,stepwise$residuals)
+plot(CARS$Leather,stepwise$residuals)
+plot(CARS$Mileage,stepwise$residuals)
+plot(stepwise$fitted.values,stepwise$residuals)
+
+#3.8 Residual vs Mileage with Drawn Line at 8000
+plot(CARS$Mileage,stepwise$residuals) %>%
+  abline(v= 8000,col= 'red')
+
+#a) See graph of xvar7 - it appears that generally as mileage increases residuals stay constant or increase at a very small rate 
+
+#b)Based on the stepwise equation from 2.5c the predicted price (being the model) has signs of heteroskedasticity ar residuals are increase in a funnel shape - see last plot, can add more intrepretation
+```
+
+Question 3.9
+
+```{r}
+stepwise
+logfunction=lm(log(CARS$Price)~CARS$Cyl+CARS$Doors+CARS$Cruise+CARS$Sound+CARS$Leather+CARS$Mileage,data=CARS)
+logfunction
+plot(logfunction,1)
+
+
+sqrtfunction=lm(sqrt(CARS$Price)~CARS$Cyl+CARS$Doors+CARS$Cruise+CARS$Sound+CARS$Leather+CARS$Mileage,data=CARS)
+sqrtfunction
+plot(sqrtfunction,1)
+
+
+summary(logfunction)
+summary(sqrtfunction)
+
+#a) for the logfunction function, Multiple R-squared:  0.4836,	Adjusted R-squared:  0.4797. for the sqrt function, Multiple R-squared:  0.4689,	Adjusted R-squared:  0.4649. Log seemed to have created a more constant resduals value as price increased while sqrt function has an increasing residual value as price increases.****** need comment on skewness
+#b) For this case, the better r squared value corrisponded to the better residual plot, based on the heteroskedasticity
+
+regfunction=lm(CARS$Price~CARS$Cyl+CARS$Doors+CARS$Cruise+CARS$Sound+CARS$Leather+CARS$Mileage,data=CARS)
+summary(regfunction)
+plot(regfunction,1)
+#c) comapred to the orginal from 2.5c, Multiple R-squared:  0.4457,	Adjusted R-squared:  0.4415. thus the log function has the highest of these values. It is also notisable that the orginal residual plot has increaseing residuals,indicating heteroskedasticity. Log function seems to improve on both these aspects
+
+```
+Activity 4
+
+10. Calculate a regression equation using the explanatory variables suggested in Question 5 and Price as the
+response. Identify any residuals (or cluster of residuals) that don’t seem to fit the overall pattern in the
+residual versus fit and residual versus mileage plots. Any data values that don’t seem to fit the general
+pattern of the data set are called outliers
+
+10a) Identify the specific rows of data that represent these points. Are there any consistencies that you can
+find?
+
+10b)Is this cluster of outliers helpful in identifying the patterns that were found in the ordered residual plots?
+Why or why not?
+
+11) Run the analysis with and without the largest cluster of potential outliers (the cluster of outliers
+corresponds to the Cadillac convertibles). Use Price as the response. Does the cluster of outliers
+influence the coefficients in the regression line?
+
+
+```{r}
+#Activity 4: Outliers and Influential Observations
+#10a: Regression Equation: y = b0 + b1x1 + b2x2 + b3x3 + b4x4+ b5x5+b6x6
+# y = b0 + b1(Cyl) + b2(Doors) + b3(Cruise) + b4(Sound) + b5(Leather) + b6Mileage
+
+#Outliers Analysis [Outliers, Leverage, Cook's Distance]
+#A suitable starting point from which we can begin identifying any outlaying points is to define the criteria for what is considered an 'outlier'. Outliers are data points that lie far away from the majority of the data and its predicted value (y-value) possessing larger residual values. More specifically, the traditional rule of thumb has always been that any point with a studentized residual value beyond 3 deviations of the dataset (in absolute value) is considered an outlier. Knowing this, we can begin the removal of data values by this standard. 
+
+#Calculate Studentized Residual Value // Pre-Outlier Removal Histogram // Initial Summary Chart to Compare
+resid_studentized = rstudent(stepwise)
+hist(resid_studentized, main = "Studentized Residual Distribution")
+summary(stepwise)
+
+# Find the |Studentized Residuals| > 3 standard deviations
+(Beyond3 = resid_studentized[abs(resid_studentized) > 3])
+
+#Create Vector of Rows for Points within the Outlier List 
+outlier_list = vector()
+for (name in names(Beyond3)) {
+    print(CARS[as.integer(name), ])
+    outlier_list[length(outlier_list) + 1] = as.integer(name)
+}
+
+#Remove Outliers and Compare with Initial Summary Chart
+CARS_no_outliers = CARS[-outlier_list, ]
+model_no_outliers = lm(Price ~ Cyl + Doors + Cruise + Sound + Leather + Mileage, data = CARS_no_outliers)
+summary(model_no_outliers)
+
+#Comparison Before Removal and Post Removal
+resid_studentized_no_outliers = rstudent(model_no_outliers)
+hist(resid_studentized_no_outliers, main = "Studentized Residual Distribution Post Removal of Outliers")
+```
+
+```{r}
+#Influential Points Analysis
+#In the section above we were reminded that outlying points were data points that went beyond 3 standard deviations of the studentized residual value of a dataset over its y-values. In an influential points analysis, however, we will now examine the 'leverage' of a dataset which measures any unusual influence of a dataset over its X-values. We will begin first by calculating the leverage in this dataset. Once this is done we can use 'Cook's Distance', one of the most commonly used tools in the field to identify the net effect of removing an outlier or points that are worth further investigations. These points are called "influential points".
+
+#Defining Leverage, k and n 
+lev = hatvalues(model_no_outliers)
+k = length(coef(model_no_outliers)) - 1
+n = nrow(CARS_no_outliers)
+
+#Plot for identifying Data Points with Large Leverage in CARS_no_outliers data
+plot(as.integer(rownames(CARS_no_outliers)), lev, main = "Leverage in CARS_no_outliers Dataset", 
+    ylab = "Leverage Value")
+abline(h = 2 * (k + 1)/n, lty = 2)
+abline(h = 3 * (k + 1)/n, lty = 2)
+
+#Exclude all high leverage AND outliers on X-axis, collect observations that are outliers 
+(Past3 = lev[lev > (3 * (k + 1)/n)])
+biglev_list = vector()
+for (name in names(Past3)) {
+    print(CARS_no_outliers[rownames(cars5_ex_outliers) == as.integer(name), 
+        ])
+    biglev_list[length(biglev_list) + 1] = as.integer(name)
+}
+
+# Result: No Outliers over X-Axis to additionally exclude we can therefore move forward to Cook's Distance Analysis
+
+#11. Comparing Cook's Distance before and after removing outliers 
+cook_before = cooks.distance(stepwise)
+cook_after_removal = cooks.distance(model_no_outliers)
+
+par(mfrow = c(1, 2))
+plot(as.integer(rownames(CARS)), cook_before, main = "Including Outliers", 
+    ylab = "Cook's Distance", ylim = c(0, max(cook_before)))
+abline(h = 0.5)
+plot(as.integer(rownames(CARS_no_outliers)), cook_after_removal, main = "Excluding Outliers", 
+    ylab = "", ylim = c(0, max(cook_before)))
+abline(h = 0.5)
+
+#10b) Comparing Residual Plots Before Outliers Removed vs Post Removal 
+#Insert Plots 
+
+#Run the analysis with and without the largest cluster of potential outliers (the cluster of outliers corresponds to the Cadillac convertibles). Use Price as the response. Does the cluster of outliers influence the coefficients in the regression line?
+#compare Coefficients 
+
+
+#Cook's Distance:Identifying residisuals
+cooksd <- cooks.distance(stepwise) # Returns the cook's distance of Stepwise Model (before outliers removed)
+cooksd_no_outliers <- cooks.distance(model_no_outliers)
+
+#Plot Comparisons  Before Outlier Removal and Post Outlier Removal
+plot(stepwise,6)
+plot(model_no_outliers,6)
+plot(stepwise, pch = 10, col = "red", which=(4))
+plot(model_no_outliers, pch=10, col="red", which=(4))
+
+#there is a drastic difference at observations 81, 151 and 152. Influential observations and outliers can be observed. We may need to remove these outliers as well.
+
+#Table of All Cook's Distances in Model_no_outliers Data
+All_Cooks_Distances <- cooks.distance(model_no_outliers)
+CD_rounded <- round(All_Cooks_Distances,5)
+CD_table <- as.table(CD_rounded)
+CD_table
+
+
+
+```
+
